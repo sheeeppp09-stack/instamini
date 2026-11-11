@@ -5,13 +5,14 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
-// 새 버전마다 versionName과 versionCode를 함께 올린다.
-val appVersion = "0.2"
+val appVersion = "0.3"
 
 base {
     archivesName.set("InstaMini-v$appVersion")
 }
 
+// Signing credentials are injected by GitHub Actions Secrets.
+// Never store the keystore or passwords in this public repository.
 val signingFile = file("instamini.jks")
 val signingStorePassword = System.getenv("KEYSTORE_PASSWORD")
 val signingKeyAlias = System.getenv("KEY_ALIAS")
@@ -29,7 +30,7 @@ android {
         applicationId = "com.instamini.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 3
+        versionCode = 4
         versionName = appVersion
     }
 
@@ -52,8 +53,6 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            // Actions에서는 비밀값으로 고정 키를 사용한다.
-            // 키 파일/비밀값이 없는 로컬 빌드는 디버그 키로만 빌드된다.
             signingConfig = if (hasPrivateSigningKey) {
                 signingConfigs.getByName("release")
             } else {
@@ -91,4 +90,4 @@ kotlin {
     }
 }
 
-// 외부 의존성 없음 (androidx, Compose, 네트워크/분석/광고 SDK 모두 미사용)
+// No external dependencies: no AndroidX, Compose, network, analytics, or ad SDKs.

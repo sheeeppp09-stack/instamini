@@ -7,6 +7,7 @@ local.properties
 *.apk
 *.aab
 
-# Private app signing key: never commit this file
+# Private signing keys must never be committed
 app/instamini.jks
 *.jks
+*.keystore

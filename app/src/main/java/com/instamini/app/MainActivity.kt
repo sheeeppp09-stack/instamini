@@ -6,20 +6,28 @@ import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.graphics.Typeface
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.text.format.Formatter
+import android.util.TypedValue
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.webkit.CookieManager
 import android.webkit.RenderProcessGoneDetail
+import android.webkit.ValueCallback
+import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
+import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.TextView
 import java.io.File
+import kotlin.math.abs
 
 private const val HOME = "https://www.instagram.com/"
 private const val DM = "https://www.instagram.com/direct/inbox/"
+private const val REQ_FILE = 1
 
 // JS 인터페이스 없이 evaluateJavascript로만 주입.
 // 1) Reels 피드/Explore 링크와 피드 게시물을 숨김 (DM으로 받은 단일 릴스 /reel/ 링크는 유지)
@@ -52,24 +60,34 @@ class MainActivity : Activity() {
     private lateinit var web: WebView
     private lateinit var settingsPane: View
     private lateinit var cacheSize: TextView
-    private lateinit var tabs: Array<TextView>
+    private lateinit var tabs: Array<TextView>   // 0 = Stories, 1 = DM, 2 = 설정
+    private lateinit var modes: Array<TextView>  // 0 = 라이트, 1 = 다크
 
-    private var webTab = 0 // 0 = DM, 1 = Stories
+    private var dark = false
+    private var webTab = 1 // 0 = Stories, 1 = DM
     private var storiesMode = false
+    private var filePicker: ValueCallback<Array<Uri>>? = null
+    private var downX = 0f
+    private var downY = 0f
 
+    @Suppress("DEPRECATION")
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
+        dark = getSharedPreferences("s", MODE_PRIVATE).getBoolean("dark", false)
+        setTheme(if (dark) R.style.Theme_InstaMini_Dark else R.style.Theme_InstaMini)
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+        applyBars(color(R.attr.imBg))
 
         web = findViewById(R.id.web)
         settingsPane = findViewById(R.id.settings_pane)
         cacheSize = findViewById(R.id.cache_size)
         tabs = arrayOf(
-            findViewById(R.id.tab_dm),
             findViewById(R.id.tab_stories),
+            findViewById(R.id.tab_dm),
             findViewById(R.id.tab_settings)
         )
+        modes = arrayOf(findViewById(R.id.opt_light), findViewById(R.id.opt_dark))
 
         CookieManager.getInstance().setAcceptCookie(true)
 
@@ -79,17 +97,27 @@ class MainActivity : Activity() {
             allowFileAccess = false
             allowContentAccess = false
             setSupportZoom(false)
+            if (Build.VERSION.SDK_INT in 29..32) {
+                forceDark = if (dark) WebSettings.FORCE_DARK_AUTO else WebSettings.FORCE_DARK_OFF
+            }
         }
         web.webViewClient = client
+        web.webChromeClient = chrome
 
         for (i in tabs.indices) tabs[i].setOnClickListener { select(i) }
+        for (i in modes.indices) modes[i].setOnClickListener { setDark(i == 1) }
+        markModes()
+
         findViewById<View>(R.id.cache_clear).setOnClickListener {
-            // HTTP 캐시만 삭제. 쿠키/Local Storage/DOM Storage는 건드리지 않음.
+            // 임시 캐시 전부 삭제: HTTP 캐시 + cacheDir. 쿠키/Local Storage/DOM Storage는 dataDir에 있어 영향 없음.
             web.clearCache(true)
-            cacheSize.postDelayed({ refreshCacheSize() }, 700)
+            Thread {
+                clearDir(cacheDir)
+                runOnUiThread { refreshCacheSize() }
+            }.start()
         }
 
-        select(0)
+        select(1)
     }
 
     private val client = object : WebViewClient() {
@@ -134,11 +162,62 @@ class MainActivity : Activity() {
         }
     }
 
+    // DM 사진/파일 첨부: 시스템 파일 선택기 사용 (별도 권한 불필요)
+    private val chrome = object : WebChromeClient() {
+        override fun onShowFileChooser(
+            view: WebView,
+            callback: ValueCallback<Array<Uri>>,
+            params: FileChooserParams
+        ): Boolean {
+            filePicker?.onReceiveValue(null)
+            filePicker = callback
+            return try {
+                startActivityForResult(params.createIntent(), REQ_FILE)
+                true
+            } catch (e: ActivityNotFoundException) {
+                filePicker = null
+                false
+            }
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (requestCode == REQ_FILE) {
+            filePicker?.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(resultCode, data))
+            filePicker = null
+        } else {
+            super.onActivityResult(requestCode, resultCode, data)
+        }
+    }
+
+    // 좌→우 스와이프 = Stories, 우→좌 스와이프 = DM.
+    // 스토리 트레이/노트 행의 가로 스크롤과 겹치지 않도록 화면 아래 70%에서 시작한 스와이프만 인식한다.
+    override fun dispatchTouchEvent(e: MotionEvent): Boolean {
+        when (e.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                downX = e.x
+                downY = e.y
+            }
+            MotionEvent.ACTION_UP -> onSwipe(e.x - downX, e.y - downY)
+        }
+        return super.dispatchTouchEvent(e)
+    }
+
+    private fun onSwipe(dx: Float, dy: Float) {
+        if (settingsPane.visibility == View.VISIBLE) return
+        if (abs(dx) < web.width * 0.35f || abs(dx) < abs(dy) * 2) return
+        if (downY < web.height * 0.3f) return
+        val path = pathOf(Uri.parse(web.url ?: return))
+        if (dx > 0 && webTab == 1 && path.startsWith("/direct/inbox")) select(0)
+        else if (dx < 0 && webTab == 0 && path == "/") select(1)
+    }
+
     private fun select(i: Int) {
         for (k in tabs.indices) {
             val on = k == i
             tabs[k].setTypeface(null, if (on) Typeface.BOLD else Typeface.NORMAL)
-            tabs[k].setTextColor(getColor(if (on) R.color.text else R.color.gray))
+            tabs[k].setTextColor(color(if (on) R.attr.imText else R.attr.imGray))
         }
         if (i == 2) {
             settingsPane.visibility = View.VISIBLE
@@ -149,9 +228,38 @@ class MainActivity : Activity() {
         // 설정에서 돌아올 때는 재로딩하지 않는다. WebView는 계속 살아 있다.
         if (i != webTab || web.url == null) {
             webTab = i
-            storiesMode = i == 1
-            web.loadUrl(if (i == 1) HOME else DM)
+            storiesMode = i == 0
+            web.loadUrl(if (i == 0) HOME else DM)
         }
+    }
+
+    private fun setDark(d: Boolean) {
+        if (d == dark) return
+        getSharedPreferences("s", MODE_PRIVATE).edit().putBoolean("dark", d).apply()
+        recreate() // 테마 적용을 위해 한 번 재생성. 로그인(쿠키)은 유지됨.
+    }
+
+    private fun markModes() {
+        for (k in modes.indices) {
+            val on = (k == 1) == dark
+            modes[k].setTypeface(null, if (on) Typeface.BOLD else Typeface.NORMAL)
+            modes[k].setTextColor(color(if (on) R.attr.imText else R.attr.imGray))
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun applyBars(bg: Int) {
+        window.statusBarColor = bg
+        window.navigationBarColor = bg
+        val light = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR or View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
+        val v = window.decorView
+        v.systemUiVisibility = if (dark) v.systemUiVisibility and light.inv() else v.systemUiVisibility or light
+    }
+
+    private fun color(attr: Int): Int {
+        val t = TypedValue()
+        theme.resolveAttribute(attr, t, true)
+        return t.data
     }
 
     private fun refreshCacheSize() {
@@ -169,6 +277,13 @@ class MainActivity : Activity() {
         var n = 0L
         f.listFiles()?.forEach { n += dirSize(it) }
         return n
+    }
+
+    private fun clearDir(dir: File) {
+        dir.listFiles()?.forEach {
+            if (it.isDirectory) clearDir(it)
+            it.delete()
+        }
     }
 
     private fun openExternal(u: Uri) {

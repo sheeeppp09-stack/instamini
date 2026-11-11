@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <attr name="imBg" format="color" />
+    <attr name="imText" format="color" />
+    <attr name="imGray" format="color" />
+    <attr name="imDivider" format="color" />
+</resources>

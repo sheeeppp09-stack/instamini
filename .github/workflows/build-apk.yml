@@ -43,7 +43,7 @@ jobs:
         shell: bash
         run: |
           if [[ -z "$KEYSTORE_BASE64" ]]; then
-            echo "::error::Missing GitHub Actions secret KEYSTORE_BASE64. Add the four signing secrets described in README.md, then rerun this workflow."
+            echo "::error::Missing GitHub Actions secret KEYSTORE_BASE64."
             exit 1
           fi
           printf '%s' "$KEYSTORE_BASE64" | base64 --decode > app/instamini.jks
@@ -57,16 +57,27 @@ jobs:
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
           if [[ -z "$KEYSTORE_PASSWORD" || -z "$KEY_ALIAS" || -z "$KEY_PASSWORD" ]]; then
-            echo "::error::Missing KEYSTORE_PASSWORD, KEY_ALIAS, or KEY_PASSWORD repository secret."
+            echo "::error::Missing signing secrets. Check KEYSTORE_PASSWORD, KEY_ALIAS, and KEY_PASSWORD."
             exit 1
           fi
           gradle --no-daemon assembleRelease
 
+      - name: Read app version
+        id: app-version
+        shell: bash
+        run: |
+          APP_VERSION="$(awk -F '"' '/val appVersion =/ {print $2; exit}' app/build.gradle.kts)"
+          if [[ -z "$APP_VERSION" ]]; then
+            echo "::error::Could not read appVersion from app/build.gradle.kts"
+            exit 1
+          fi
+          echo "value=$APP_VERSION" >> "$GITHUB_OUTPUT"
+
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: InstaMini-v0.2-apk
-          path: app/build/outputs/apk/release/InstaMini-v0.2-release.apk
+          name: InstaMini-v${{ steps.app-version.outputs.value }}-apk
+          path: app/build/outputs/apk/release/InstaMini-v${{ steps.app-version.outputs.value }}-release.apk
           if-no-files-found: error
           retention-days: 14
 
@@ -75,12 +86,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          APP_VERSION="$(awk -F '"' '/val appVersion =/ {print $2; exit}' app/build.gradle.kts)"
-          if [[ -z "$APP_VERSION" ]]; then
-            echo "Could not read appVersion from app/build.gradle.kts"
-            exit 1
-          fi
-
+          APP_VERSION="${{ steps.app-version.outputs.value }}"
           TAG="v${APP_VERSION}"
           APK="app/build/outputs/apk/release/InstaMini-v${APP_VERSION}-release.apk"
           test -f "$APK"
@@ -96,7 +102,7 @@ jobs:
           - JDK 17 / Gradle 8.9 / Android SDK 34로 빌드
           - 비공개 GitHub Actions signing secrets로 고정 서명
 
-          v0.1의 디버그 서명과는 서명키가 다릅니다. 최초 업데이트 시 기존 앱 제거가 필요할 수 있으며, 이 경우 앱 데이터와 로그인 정보가 삭제됩니다. v0.2 이후에는 동일한 signing key를 사용하면 업데이트 설치가 가능합니다.
+          v0.1은 디버그 서명, v0.2부터는 동일한 개인 서명키를 사용합니다. 동일한 키가 유지되면 기존 앱 위에 업데이트 설치가 가능합니다.
           EOF
 
           if gh release view "$TAG" >/dev/null 2>&1; then
@@ -106,4 +112,4 @@ jobs:
             gh release create "$TAG" "$APK" --title "InstaMini ${TAG}" --notes-file "$NOTES_FILE"
           fi
 
-          echo "Published ${APK} to GitHub Release ${TAG}"
+          echo "Published $APK to GitHub Release $TAG"

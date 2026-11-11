@@ -2,34 +2,8 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/white"
+    android:background="?attr/imBg"
     android:orientation="vertical">
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="44dp"
-        android:orientation="horizontal">
-
-        <TextView
-            android:id="@+id/tab_dm"
-            style="@style/Tab"
-            android:text="@string/tab_dm" />
-
-        <TextView
-            android:id="@+id/tab_stories"
-            style="@style/Tab"
-            android:text="@string/tab_stories" />
-
-        <TextView
-            android:id="@+id/tab_settings"
-            style="@style/Tab"
-            android:text="@string/tab_settings" />
-    </LinearLayout>
-
-    <View
-        android:layout_width="match_parent"
-        android:layout_height="1dp"
-        android:background="@color/divider" />
 
     <FrameLayout
         android:layout_width="match_parent"
@@ -39,23 +13,48 @@
         <WebView
             android:id="@+id/web"
             android:layout_width="match_parent"
-            android:layout_height="match_parent" />
+            android:layout_height="match_parent"
+            android:overScrollMode="never" />
 
         <LinearLayout
             android:id="@+id/settings_pane"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:background="@color/white"
+            android:background="?attr/imBg"
             android:orientation="vertical"
             android:padding="16dp"
             android:visibility="gone">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/mode_title"
+                android:textColor="?attr/imText"
+                android:textSize="16sp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="24dp"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/opt_light"
+                    style="@style/Opt"
+                    android:text="@string/mode_light" />
+
+                <TextView
+                    android:id="@+id/opt_dark"
+                    style="@style/Opt"
+                    android:text="@string/mode_dark" />
+            </LinearLayout>
 
             <TextView
                 android:id="@+id/cache_size"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="@string/cache_calculating"
-                android:textColor="@color/text"
+                android:textColor="?attr/imText"
                 android:textSize="16sp" />
 
             <TextView
@@ -64,7 +63,7 @@
                 android:layout_marginTop="8dp"
                 android:layout_marginBottom="16dp"
                 android:text="@string/cache_note"
-                android:textColor="@color/gray"
+                android:textColor="?attr/imGray"
                 android:textSize="13sp" />
 
             <TextView
@@ -73,4 +72,30 @@
                 android:text="@string/cache_clear" />
         </LinearLayout>
     </FrameLayout>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="?attr/imDivider" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/tab_stories"
+            style="@style/Tab"
+            android:text="@string/tab_stories" />
+
+        <TextView
+            android:id="@+id/tab_dm"
+            style="@style/Tab"
+            android:text="@string/tab_dm" />
+
+        <TextView
+            android:id="@+id/tab_settings"
+            style="@style/Tab"
+            android:text="@string/tab_settings" />
+    </LinearLayout>
 </LinearLayout>
