@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -40,10 +40,52 @@ jobs:
       - name: Build release APK
         run: gradle --no-daemon assembleRelease
 
-      - name: Upload APK
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: InstaMini-apk
           path: app/build/outputs/apk/release/*.apk
           if-no-files-found: error
           retention-days: 14
+
+      - name: Publish APK to GitHub Releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          APP_VERSION="$(sed -nE 's/^val appVersion = "([^"]+)".*/\1/p' app/build.gradle.kts | head -n 1)"
+          if [[ -z "$APP_VERSION" ]]; then
+            echo "Could not read appVersion from app/build.gradle.kts"
+            exit 1
+          fi
+
+          TAG="v${APP_VERSION}"
+          APK="app/build/outputs/apk/release/InstaMini-v${APP_VERSION}-release.apk"
+          if [[ ! -f "$APK" ]]; then
+            echo "APK not found: $APK"
+            find app/build/outputs/apk -type f -maxdepth 4 -print
+            exit 1
+          fi
+
+          NOTES_FILE="$(mktemp)"
+          cat > "$NOTES_FILE" <<EOF
+          ## InstaMini ${TAG}
+
+          Android 개인용 Instagram 경량 클라이언트.
+
+          - APK: `InstaMini-v${APP_VERSION}-release.apk`
+          - Android 8.0 (API 26) 이상
+          - JDK 17 / Gradle 8.9 / Android SDK 34로 빌드
+          - 개인 설치용 디버그 서명
+
+          설치 시 기존 버전과 서명키가 다르면 기존 앱을 제거해야 할 수 있습니다. 제거하면 앱 데이터와 로그인 정보가 삭제됩니다.
+          EOF
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$APK" --clobber
+            gh release edit "$TAG" --title "InstaMini ${TAG}" --notes-file "$NOTES_FILE"
+          else
+            gh release create "$TAG" "$APK"               --title "InstaMini ${TAG}"               --notes-file "$NOTES_FILE"
+          fi
+
+          echo "Published ${APK} to GitHub Release ${TAG}"
