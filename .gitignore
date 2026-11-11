@@ -1,3 +1,4 @@
+# Gradle / Android
 .gradle/
 build/
 local.properties
@@ -5,3 +6,7 @@ local.properties
 *.iml
 *.apk
 *.aab
+
+# Private app signing key: never commit this file
+app/instamini.jks
+*.jks

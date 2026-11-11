@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   build:
-    name: Build release APK
+    name: Build and publish InstaMini APK
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -37,14 +37,36 @@ jobs:
         with:
           gradle-version: "8.9"
 
+      - name: Prepare private release signing key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        shell: bash
+        run: |
+          if [[ -z "$KEYSTORE_BASE64" ]]; then
+            echo "::error::Missing GitHub Actions secret KEYSTORE_BASE64. Add the four signing secrets described in README.md, then rerun this workflow."
+            exit 1
+          fi
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > app/instamini.jks
+          test -s app/instamini.jks
+          chmod 600 app/instamini.jks
+
       - name: Build release APK
-        run: gradle --no-daemon assembleRelease
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          if [[ -z "$KEYSTORE_PASSWORD" || -z "$KEY_ALIAS" || -z "$KEY_PASSWORD" ]]; then
+            echo "::error::Missing KEYSTORE_PASSWORD, KEY_ALIAS, or KEY_PASSWORD repository secret."
+            exit 1
+          fi
+          gradle --no-daemon assembleRelease
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: InstaMini-apk
-          path: app/build/outputs/apk/release/*.apk
+          name: InstaMini-v0.2-apk
+          path: app/build/outputs/apk/release/InstaMini-v0.2-release.apk
           if-no-files-found: error
           retention-days: 14
 
@@ -53,7 +75,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          APP_VERSION="$(sed -nE 's/^val appVersion = "([^"]+)".*/\1/p' app/build.gradle.kts | head -n 1)"
+          APP_VERSION="$(sed -nE 's/^val appVersion = "([^"]+)".*/\\1/p' app/build.gradle.kts | head -n 1)"
           if [[ -z "$APP_VERSION" ]]; then
             echo "Could not read appVersion from app/build.gradle.kts"
             exit 1
@@ -61,11 +83,7 @@ jobs:
 
           TAG="v${APP_VERSION}"
           APK="app/build/outputs/apk/release/InstaMini-v${APP_VERSION}-release.apk"
-          if [[ ! -f "$APK" ]]; then
-            echo "APK not found: $APK"
-            find app/build/outputs/apk -type f -maxdepth 4 -print
-            exit 1
-          fi
+          test -f "$APK"
 
           NOTES_FILE="$(mktemp)"
           cat > "$NOTES_FILE" <<EOF
@@ -76,16 +94,16 @@ jobs:
           - APK: `InstaMini-v${APP_VERSION}-release.apk`
           - Android 8.0 (API 26) 이상
           - JDK 17 / Gradle 8.9 / Android SDK 34로 빌드
-          - 개인 설치용 디버그 서명
+          - 비공개 GitHub Actions signing secrets로 고정 서명
 
-          설치 시 기존 버전과 서명키가 다르면 기존 앱을 제거해야 할 수 있습니다. 제거하면 앱 데이터와 로그인 정보가 삭제됩니다.
+          v0.1의 디버그 서명과는 서명키가 다릅니다. 최초 업데이트 시 기존 앱 제거가 필요할 수 있으며, 이 경우 앱 데이터와 로그인 정보가 삭제됩니다. v0.2 이후에는 동일한 signing key를 사용하면 업데이트 설치가 가능합니다.
           EOF
 
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" "$APK" --clobber
             gh release edit "$TAG" --title "InstaMini ${TAG}" --notes-file "$NOTES_FILE"
           else
-            gh release create "$TAG" "$APK"               --title "InstaMini ${TAG}"               --notes-file "$NOTES_FILE"
+            gh release create "$TAG" "$APK" --title "InstaMini ${TAG}" --notes-file "$NOTES_FILE"
           fi
 
           echo "Published ${APK} to GitHub Release ${TAG}"

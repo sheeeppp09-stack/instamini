@@ -5,12 +5,21 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
-// 수정할 때마다 0.1씩 올림 (versionCode도 +1). APK 파일명에도 반영됨.
-val appVersion = "0.1"
+// 새 버전마다 versionName과 versionCode를 함께 올린다.
+val appVersion = "0.2"
 
 base {
     archivesName.set("InstaMini-v$appVersion")
 }
+
+val signingFile = file("instamini.jks")
+val signingStorePassword = System.getenv("KEYSTORE_PASSWORD")
+val signingKeyAlias = System.getenv("KEY_ALIAS")
+val signingKeyPassword = System.getenv("KEY_PASSWORD")
+val hasPrivateSigningKey = signingFile.exists() &&
+    !signingStorePassword.isNullOrBlank() &&
+    !signingKeyAlias.isNullOrBlank() &&
+    !signingKeyPassword.isNullOrBlank()
 
 android {
     namespace = "com.instamini.app"
@@ -19,10 +28,20 @@ android {
     defaultConfig {
         applicationId = "com.instamini.app"
         minSdk = 26
-        // 34 유지: 35 이상은 edge-to-edge가 강제되어 상단바가 상태표시줄과 겹침
         targetSdk = 34
-        versionCode = 2
+        versionCode = 3
         versionName = appVersion
+    }
+
+    signingConfigs {
+        if (hasPrivateSigningKey) {
+            create("release") {
+                storeFile = signingFile
+                storePassword = signingStorePassword
+                keyAlias = signingKeyAlias
+                keyPassword = signingKeyPassword
+            }
+        }
     }
 
     buildTypes {
@@ -33,8 +52,13 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            // 개인 설치용: 디버그 키로 서명해야 release APK를 바로 설치할 수 있음
-            signingConfig = signingConfigs.getByName("debug")
+            // Actions에서는 비밀값으로 고정 키를 사용한다.
+            // 키 파일/비밀값이 없는 로컬 빌드는 디버그 키로만 빌드된다.
+            signingConfig = if (hasPrivateSigningKey) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
         }
     }
 
