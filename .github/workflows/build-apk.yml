@@ -75,7 +75,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          APP_VERSION="$(sed -nE 's/^val appVersion = "([^"]+)".*/\\1/p' app/build.gradle.kts | head -n 1)"
+          APP_VERSION="$(awk -F '"' '/val appVersion =/ {print $2; exit}' app/build.gradle.kts)"
           if [[ -z "$APP_VERSION" ]]; then
             echo "Could not read appVersion from app/build.gradle.kts"
             exit 1
