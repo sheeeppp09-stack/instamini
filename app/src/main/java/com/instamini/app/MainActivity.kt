@@ -21,9 +21,31 @@ import java.io.File
 private const val HOME = "https://www.instagram.com/"
 private const val DM = "https://www.instagram.com/direct/inbox/"
 
-// Reels/Explore 링크와 피드 게시물(article)을 숨기는 CSS. JS 인터페이스 없이 evaluateJavascript만 사용.
-private const val HIDE_JS =
-    """(function(){if(document.getElementById('im'))return;var s=document.createElement('style');s.id='im';s.textContent='a[href^="/reels"],a[href^="/reel/"],a[href^="/explore"],article{display:none!important}';(document.head||document.documentElement).appendChild(s)})()"""
+// JS 인터페이스 없이 evaluateJavascript로만 주입.
+// 1) Reels 피드/Explore 링크와 피드 게시물을 숨김 (DM으로 받은 단일 릴스 /reel/ 링크는 유지)
+// 2) 홈(/)에서는 video를 즉시 정지·소스 제거 (스토리 종료 후 피드 영상 자동재생으로 인한 데이터 손실 방지)
+// 3) 단일 릴스(/reel/) 화면에서는 스크롤/스와이프/방향키 이동을 막음
+private const val HIDE_JS = """(function(){
+if(window.__im)return;window.__im=1;
+var s=document.createElement('style');
+s.textContent='a[href^="/reels"],a[href^="/explore"],article{display:none!important}';
+(document.head||document.documentElement).appendChild(s);
+function isHome(){return location.pathname==='/'}
+function isReel(){return location.pathname.split('/').indexOf('reel')>=0}
+function kill(v){try{v.pause();v.removeAttribute('src');v.preload='none';v.load()}catch(e){}}
+new MutationObserver(function(){
+if(!isHome())return;
+var a=document.querySelectorAll('video');
+for(var i=0;i<a.length;i++)kill(a[i]);
+}).observe(document.documentElement,{childList:true,subtree:true});
+function lock(e){if(isReel())e.preventDefault()}
+document.addEventListener('touchmove',lock,{passive:false,capture:true});
+document.addEventListener('wheel',lock,{passive:false,capture:true});
+document.addEventListener('keydown',function(e){
+var k=e.key;
+if(isReel()&&(k==='ArrowDown'||k==='ArrowUp'||k==='PageDown'||k==='PageUp'||k===' '))e.preventDefault();
+},true);
+})()"""
 
 class MainActivity : Activity() {
 
@@ -164,7 +186,7 @@ class MainActivity : Activity() {
     private fun pathOf(u: Uri): String = u.path.orEmpty().ifEmpty { "/" }
 
     private fun isBlocked(path: String): Boolean =
-        path.startsWith("/explore") || path.split('/').any { it == "reels" || it == "reel" }
+        path.startsWith("/explore") || path.split('/').any { it == "reels" }
 
     @Suppress("OVERRIDE_DEPRECATION")
     override fun onBackPressed() {

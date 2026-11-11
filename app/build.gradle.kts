@@ -5,6 +5,13 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
+// 수정할 때마다 0.1씩 올림 (versionCode도 +1). APK 파일명에도 반영됨.
+val appVersion = "0.1"
+
+base {
+    archivesName.set("InstaMini-v$appVersion")
+}
+
 android {
     namespace = "com.instamini.app"
     compileSdk = 34
@@ -14,8 +21,8 @@ android {
         minSdk = 26
         // 34 유지: 35 이상은 edge-to-edge가 강제되어 상단바가 상태표시줄과 겹침
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = appVersion
     }
 
     buildTypes {

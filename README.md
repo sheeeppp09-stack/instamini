@@ -1,26 +1,37 @@
-# InstaMini
+# InstaMini v0.1
 
-Android 개인용 Instagram 경량 클라이언트 프로젝트입니다.
+Android 개인용 Instagram 경량 클라이언트입니다.
 
-## 휴대폰에서 APK 받기
+## 최신 APK 빌드 및 다운로드
 
-1. 저장소의 Actions 탭을 엽니다.
-2. Build APK 워크플로를 선택합니다.
-3. Run workflow를 누릅니다.
-4. 빌드가 끝나면 실행 결과의 Artifacts에서 InstaMini-apk를 다운로드합니다.
-5. 내려받은 ZIP을 풀고 app-release.apk를 설치합니다.
+1. 저장소의 **Actions** 탭을 엽니다.
+2. **Build APK** 워크플로를 선택합니다.
+3. **Run workflow**를 실행합니다. `main`에 push해도 자동 빌드됩니다.
+4. 성공한 실행에서 **Artifacts → InstaMini-apk**를 다운로드합니다.
+5. ZIP을 풀고 `InstaMini-v0.1-release.apk`를 설치합니다.
 
-main 브랜치에 변경 사항을 올리면 자동 빌드됩니다. 수동 실행도 지원합니다.
-
-## 빌드 환경
+## 현재 빌드 설정
 
 - JDK 17
 - Gradle 8.9
 - Android SDK 34
 - 최소 Android 버전: Android 8.0 (API 26)
+- versionName: 0.1 / versionCode: 2
+- 외부 AndroidX, 광고, 분석 SDK 미사용
 
-GitHub Actions가 빌드 환경을 준비하므로 휴대폰에서 별도 Android SDK 설치는 필요하지 않습니다.
+## v0.1 변경점
 
-## 서명
+- 홈 화면에서 피드 동영상 자동재생을 중지
+- 단일 릴스 화면에서 세로 스와이프, 마우스 휠, 방향키를 통한 다음 릴스 이동 차단
+- Reels 피드 및 Explore 링크 숨김은 유지
+- APK 파일명에 버전 표시
 
-현재 Release APK는 Android 디버그 키로 서명됩니다. 개인 기기에 설치해 테스트하기 위한 설정이며, Google Play 배포용 서명 구성은 아닙니다.
+## 설치 및 서명 주의
+
+Release APK는 GitHub Actions 러너의 Android 디버그 키로 서명됩니다. 개인 설치용이며 Google Play 배포용이 아닙니다. 빌드마다 디버그 서명 키가 바뀔 수 있으므로 기존 InstaMini 설치본 위에 업데이트가 거부되면 기존 앱을 제거한 뒤 새 APK를 설치해야 합니다. 앱을 제거하면 로그인 쿠키와 앱 내부 데이터가 삭제될 수 있습니다.
+
+## 알려진 제한
+
+- 사진/파일 첨부 전송 미지원
+- Instagram 웹사이트의 DOM 구조가 바뀌면 숨김 규칙이 동작하지 않을 수 있음
+- Instagram 로그인, 메시지 전송, 스토리 재생 등은 실제 기기에서 별도 검증 필요
