@@ -5,7 +5,7 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
-val appVersion = "0.3"
+val appVersion = "0.4"
 
 base {
     archivesName.set("InstaMini-v$appVersion")
@@ -30,7 +30,7 @@ android {
         applicationId = "com.instamini.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 4
+        versionCode = 5
         versionName = appVersion
     }
 
