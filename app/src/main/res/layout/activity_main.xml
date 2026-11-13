@@ -16,6 +16,7 @@
             android:layout_height="match_parent"
             android:overScrollMode="never" />
 
+        <!-- 전체 로드 중 Instagram 로고 화면이 보이지 않게 가리는 단색 뷰 -->
         <View
             android:id="@+id/cover"
             android:layout_width="match_parent"
