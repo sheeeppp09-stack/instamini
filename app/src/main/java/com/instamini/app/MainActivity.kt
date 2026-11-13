@@ -11,6 +11,7 @@ import android.os.Bundle
 import android.text.format.Formatter
 import android.util.TypedValue
 import android.view.MotionEvent
+import android.view.VelocityTracker
 import android.view.View
 import android.view.ViewGroup
 import android.webkit.CookieManager
@@ -53,7 +54,13 @@ function kill(v){try{v.pause();v.removeAttribute('src');v.preload='none';v.load(
 function mark(n){if(n&&n.setAttribute)n.setAttribute('data-imh','1')}
 function after(n){var c=0;while(n&&n!==d.body&&c<12){var x=n.nextElementSibling;while(x){mark(x);x=x.nextElementSibling}n=n.parentElement;c++}}
 function blockOf(n){var c=0;while(n.parentElement&&n.parentElement!==d.body&&!n.parentElement.querySelector('img,canvas')&&c<12){n=n.parentElement;c++}return n}
-function findText(){var w=d.createTreeWalker(d.body,NodeFilter.SHOW_TEXT),n;while((n=w.nextNode())){if(/추천 게시물|Suggested [Pp]osts/.test(n.nodeValue))return n.parentElement}return null}
+var ft=null,fts=0;
+function findText(){
+if(ft&&ft.isConnected)return ft;
+var now=Date.now();if(now-fts<2000)return null;fts=now;
+var w=d.createTreeWalker(d.body,NodeFilter.SHOW_TEXT),n;
+while((n=w.nextNode())){if(/추천 게시물|Suggested [Pp]osts/.test(n.nodeValue)){ft=n.parentElement;return ft}}
+return null}
 function feed(){
 var a=[],t=findText();if(t)a.push(t);
 var sp=d.querySelectorAll('svg[aria-label="Loading..."],svg[aria-label="로드 중..."],[role="progressbar"]');
@@ -109,12 +116,13 @@ class MainActivity : Activity() {
     private var dark = false
     private var webTab = 1 // 0 = Stories, 1 = DM
     private var storiesMode = false
-    private var booting = true
+    private var booting = true      // 시작 시 홈을 한 번 불러온 뒤 같은 페이지 안에서 DM으로 이동하는 중
     private var bootRunning = false
     private var bootTries = 0
     private var filePicker: ValueCallback<Array<Uri>>? = null
     private var downX = 0f
     private var downY = 0f
+    private var vt: VelocityTracker? = null
 
     @Suppress("DEPRECATION")
     @SuppressLint("SetJavaScriptEnabled")
@@ -156,6 +164,7 @@ class MainActivity : Activity() {
         setSel(modes, if (dark) 1 else 0)
 
         findViewById<View>(R.id.cache_clear).setOnClickListener {
+            // 임시 캐시 전부 삭제: HTTP 캐시 + cacheDir. 쿠키/Local Storage/DOM Storage는 dataDir에 있어 영향 없음.
             web.clearCache(true)
             Thread {
                 clearDir(cacheDir)
@@ -163,6 +172,8 @@ class MainActivity : Activity() {
             }.start()
         }
 
+        // 시작: 홈을 한 번 불러온 뒤 같은 페이지 안에서 DM으로 이동한다.
+        // 이렇게 해야 이후 Stories↔DM 전환이 페이지 재로딩 없이(history 이동으로) 이뤄진다. 그동안은 cover로 가린다.
         webTab = 1
         select(1)
     }
@@ -185,12 +196,14 @@ class MainActivity : Activity() {
             return false
         }
 
+        // SPA 내부 이동(history.pushState)도 여기서 잡힌다.
         override fun doUpdateVisitedHistory(view: WebView, url: String?, isReload: Boolean) {
             if (url == null) return
             val u = Uri.parse(url)
             if (!isInstagram(u.host)) return
             val p = pathOf(u)
             if (isBlocked(p) || (p == "/" && !storiesMode)) {
+                // 로그인 직후처럼 이전 기록이 로그인 화면이면 되돌아가지 않고 DM을 연다.
                 val l = view.copyBackForwardList()
                 val prev = if (l.currentIndex > 0) l.getItemAtIndex(l.currentIndex - 1)?.url else null
                 val prevOk = prev != null && !pathOf(Uri.parse(prev)).startsWith("/accounts")
@@ -205,12 +218,14 @@ class MainActivity : Activity() {
             if (booting) startBoot() else hideCoverLater()
         }
 
+        // 렌더러 프로세스가 죽으면(저메모리 등) 앱 크래시 대신 액티비티를 새로 만든다.
         override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
             recreate()
             return true
         }
     }
 
+    // DM 사진/파일 첨부: 시스템 파일 선택기 사용 (별도 권한 불필요)
     private val chrome = object : WebChromeClient() {
         override fun onShowFileChooser(
             view: WebView,
@@ -239,8 +254,10 @@ class MainActivity : Activity() {
         }
     }
 
+    // 시작 시퀀스: 홈이 렌더링되면 DM 링크를 눌러 같은 페이지 안에서 DM으로 이동한다.
     private fun startBoot() {
         if (bootRunning) return
+        // 홈이 아닌 곳(로그인 화면 등)이면 이동하지 않고 그대로 보여준다.
         val p = pathOf(Uri.parse(web.url ?: return))
         if (p != "/") {
             booting = false
@@ -263,6 +280,7 @@ class MainActivity : Activity() {
             } else if (++bootTries < 15) {
                 web.postDelayed({ if (booting) bootStep() }, 400)
             } else {
+                // 링크를 못 찾으면 기존 방식(전체 로드)으로 대체
                 storiesMode = false
                 booting = false
                 bootRunning = false
@@ -275,22 +293,42 @@ class MainActivity : Activity() {
         cover.postDelayed({ cover.visibility = View.GONE }, 350)
     }
 
+    // 좌→우 스와이프 = Stories, 우→좌 스와이프 = DM.
+    // 스토리 트레이/노트 행의 가로 스크롤과 겹치지 않도록 화면 아래 70%에서 시작한 스와이프만 인식한다.
     override fun dispatchTouchEvent(e: MotionEvent): Boolean {
         when (e.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 downX = e.x
                 downY = e.y
+                vt?.recycle()
+                vt = VelocityTracker.obtain().also { it.addMovement(e) }
             }
+            MotionEvent.ACTION_MOVE -> vt?.addMovement(e)
             MotionEvent.ACTION_UP -> {
                 val dx = e.x - downX
                 val dy = e.y - downY
-                onSwipe(dx, dy)
+                var vx = 0f
+                vt?.let {
+                    it.addMovement(e)
+                    it.computeCurrentVelocity(1000)
+                    vx = it.xVelocity
+                    it.recycle()
+                }
+                vt = null
+                onSwipe(dx, dy, vx)
                 onPull(dx, dy)
             }
+            MotionEvent.ACTION_CANCEL -> {
+                vt?.recycle()
+                vt = null
+            }
         }
+        // 터치는 항상 WebView에 그대로 전달한다(가로채지 않음). Instagram 자체 스와이프는 영향받지 않는다.
         return super.dispatchTouchEvent(e)
     }
 
+    // 당겨서 새로고침: 화면 맨 위 15%에서 시작해 35% 이상 아래로 끈 세로 제스처.
+    // 스크롤과 겹치지 않도록 DM 목록과 스토리 홈에서만 동작.
     private fun onPull(dx: Float, dy: Float) {
         if (settingsPane.visibility == View.VISIBLE || booting) return
         if (dy < web.height * 0.35f || dy < abs(dx) * 2) return
@@ -299,9 +337,12 @@ class MainActivity : Activity() {
         if (path == "/" || path.startsWith("/direct/inbox")) web.reload()
     }
 
-    private fun onSwipe(dx: Float, dy: Float) {
+    // 멀리 끌었거나(35%), 빠르게 쓸었으면(속도 1200px/s 이상 + 15% 이상 이동) 전환한다.
+    private fun onSwipe(dx: Float, dy: Float, vx: Float) {
         if (settingsPane.visibility == View.VISIBLE || booting) return
-        if (abs(dx) < web.width * 0.35f || abs(dx) < abs(dy) * 2) return
+        val far = abs(dx) >= web.width * 0.35f
+        val fast = abs(vx) >= 1200f && abs(dx) >= web.width * 0.15f
+        if (!(far || fast) || abs(dx) < abs(dy) * 2) return
         if (downY < web.height * 0.3f) return
         val path = pathOf(Uri.parse(web.url ?: return))
         if (dx > 0 && webTab == 1 && path.startsWith("/direct/inbox")) select(0)
@@ -320,7 +361,9 @@ class MainActivity : Activity() {
             return
         }
         settingsPane.visibility = View.GONE
+        // 설정에서 돌아올 때는 재로딩하지 않는다. WebView는 계속 살아 있다.
         if (web.url == null) {
+            // 최초 시작: 홈을 먼저 불러온다(startBoot가 DM으로 이동시킴)
             webTab = 1
             storiesMode = true
             booting = true
@@ -332,6 +375,12 @@ class MainActivity : Activity() {
         }
     }
 
+    /**
+     * Stories(0)/DM(1) 전환. 페이지를 다시 불러오지 않는다.
+     * 1) 기록(history)에 목적지가 있으면 그 위치로 이동 (같은 페이지 안의 이동이라 즉시 전환)
+     * 2) 없으면 Instagram 내부 링크 클릭
+     * 3) 그래도 안 되면 전체 로드 (이때만 cover로 Instagram 로고 화면을 가림)
+     */
     private fun go(target: Int) {
         val l = web.copyBackForwardList()
         val cur = l.currentIndex
@@ -364,7 +413,7 @@ class MainActivity : Activity() {
     private fun setDark(d: Boolean) {
         if (d == dark) return
         prefs.edit().putBoolean("dark", d).apply()
-        recreate()
+        recreate() // 테마 적용을 위해 한 번 재생성. 로그인(쿠키)은 유지됨.
     }
 
     private fun setSel(views: Array<TextView>, sel: Int) {
@@ -436,6 +485,7 @@ class MainActivity : Activity() {
         val p = web.url?.let { pathOf(Uri.parse(it)) }
         when {
             settingsPane.visibility == View.VISIBLE -> select(webTab)
+            // Stories 홈/DM 목록에서 뒤로가기는 앱 종료. (기록 이동을 하면 탭 표시와 어긋나고 페이지를 다시 불러온다)
             p == "/" || p?.startsWith("/direct/inbox") == true -> super.onBackPressed()
             web.canGoBack() -> web.goBack()
             else -> super.onBackPressed()
@@ -451,11 +501,13 @@ class MainActivity : Activity() {
     override fun onPause() {
         web.onPause()
         web.pauseTimers()
-        CookieManager.getInstance().flush()
+        CookieManager.getInstance().flush() // 로그인 쿠키를 디스크에 확정 저장
         super.onPause()
     }
 
     override fun onDestroy() {
+        vt?.recycle()
+        vt = null
         (web.parent as? ViewGroup)?.removeView(web)
         web.destroy()
         super.onDestroy()
