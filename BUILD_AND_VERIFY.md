@@ -1,8 +1,8 @@
-# InstaMini v0.6 빌드 및 검증
+# InstaMini v0.7 빌드 및 검증
 
 ## 버전 정보
-- versionName: `0.6`
-- versionCode: `7`
+- versionName: `0.7`
+- versionCode: `8`
 - applicationId: `com.instamini.app`
 - minSdk: 26
 - targetSdk: 34
@@ -20,7 +20,7 @@
 gradle --no-daemon clean assembleRelease
 ```
 
-결과 APK는 `app/build/outputs/apk/release/`에 생성됩니다. 배포 Workflow는 실제 생성된 APK를 `InstaMini-v0.6-release.apk`로 정규화한 뒤 서명을 검증하고 GitHub Release에 게시합니다.
+결과 APK는 `app/build/outputs/apk/release/`에 생성됩니다. 배포 Workflow는 실제 생성된 APK를 `InstaMini-v0.7-release.apk`로 정규화한 뒤 서명을 검증하고 GitHub Release에 게시합니다.
 
 ## 서명 키 보안
 - JKS 파일과 비밀번호는 저장소에 포함하지 않습니다.
@@ -32,30 +32,36 @@ gradle --no-daemon clean assembleRelease
 - Release 빌드에는 기존 버전과 동일한 개인 서명 키를 사용해야 합니다. 키가 다르면 Android에서 기존 앱 위에 업데이트 설치가 거부됩니다.
 - Actions는 필요한 Secrets가 누락되면 빌드를 중단합니다. unsigned APK를 정상 배포물로 취급하지 않습니다.
 
-## v0.6 변경 사항
-- v0.5의 공식 Instagram 앱 알림 미러링 코드 제거
-- NotificationListenerService 및 관련 권한·서비스 제거
-- 공식 Instagram 앱 설치 여부 확인 코드 제거
-- 비공식 DM API 폴링 또는 백그라운드 DM 감시를 추가하지 않음
-- Manifest 선언 권한은 `INTERNET`만 유지
+## v0.7 변경 사항
+- 추천 게시물 텍스트 노드를 찾는 DOM 전체 탐색 결과를 캐시하고, 재탐색을 2초 간격으로 제한
+- `VelocityTracker`로 스와이프 속도를 감지해 빠른 좌우 제스처의 탭 전환 조건을 추가
+- 기존 단일 WebView, 로그인 쿠키 및 페이지 상태 유지 로직 보존
+- 비공식 DM API 폴링이나 백그라운드 DM 감시를 추가하지 않음
 
-**DM 백그라운드 알림은 지원하지 않습니다.** InstaMini를 열어야 새 메시지를 확인할 수 있습니다.
+## 성능 측정 상태
+이 ZIP에는 실제 Android 기기에서 측정한 전후 로딩 시간, 프레임 시간, CPU 또는 메모리 결과가 포함되어 있지 않습니다. 코드 변경을 성능 개선의 확정된 수치로 표현하지 않습니다.
+
+기기 USB 디버깅 연결 후:
+- 메모리: `adb shell dumpsys meminfo | grep -iE "instamini|webview|sandboxed"`
+- CPU: `adb shell top -b -n 1 | grep -iE "instamini|sandboxed|webview"`
+- Chrome WebView 원격 디버깅: `chrome://inspect`의 Performance 탭
 
 ## 수동 검증 체크리스트
 1. 공식 Instagram 앱이 설치되지 않은 기기에서 InstaMini 설치 및 실행
-2. Android 알림 접근 권한이나 알림 표시 권한을 요청하지 않는지 확인
-3. 로그인 후 앱을 완전히 종료하고 재실행해 로그인 유지 확인
-4. 시작 시 DM 목록이 열리는지 확인
-5. DM ↔ Stories 탭 및 좌우 스와이프 전환 확인
-6. Reels / Explore 접근 제한 확인
-7. 추천 게시물, 로딩 스피너, 불필요한 홈 피드 요소가 숨겨지는지 확인
-8. DM 파일 첨부와 당겨서 새로고침 확인
-9. 캐시 삭제 후 로그인 상태가 유지되는지 확인
-10. 라이트/다크 모드 전환 확인
-11. 기존 v0.5 위에 덮어쓰기 설치가 되는지 확인(서명 키가 같아야 함)
+2. 로그인 후 앱을 완전히 종료하고 재실행해 로그인 유지 확인
+3. 시작 시 DM 목록이 열리는지 확인
+4. DM ↔ Stories 탭 및 좌우 스와이프 전환 확인
+5. 빠른 스와이프와 느린 드래그 모두에서 의도한 탭으로 전환되는지 확인
+6. Stories 화면에서 스토리 트레이의 가로 스크롤과 탭 전환 제스처가 충돌하지 않는지 확인
+7. Stories 최초 진입·재진입 시간을 같은 네트워크 환경에서 각각 5회 측정
+8. Reels / Explore 접근 제한 확인
+9. 추천 게시물, 로딩 스피너, 불필요한 홈 피드 요소가 숨겨지는지 확인
+10. DM 파일 첨부, 당겨서 새로고침, 캐시 삭제 후 로그인 유지 확인
+11. 라이트/다크 모드 전환 확인
+12. 기존 v0.6 위에 덮어쓰기 설치가 되는지 확인(서명 키가 같아야 함)
 
 ## 알려진 한계
-- Instagram 웹사이트 DOM 변경 시 숨김 처리와 화면 전환이 동작하지 않을 수 있습니다.
-- 홈 추천 게시물 블록 탐지는 문구와 화면 요소 구조에 의존합니다.
-- DM 목록 헤더를 숨기는 방식이므로 해당 헤더 안의 새 메시지 작성·뒤로가기 UI도 함께 숨겨질 수 있습니다.
-- Instagram 계정과 서버 측 변경 사항에 따라 로그인, DM, Stories 동작은 실제 기기 검증이 필요합니다.
+- Stories 홈 첫 표시 속도는 Instagram 홈 페이지의 다운로드·실행·렌더링 시간에 영향을 받습니다.
+- Instagram DOM이 변경되면 추천 게시물 탐지 및 숨김 처리가 동작하지 않을 수 있습니다.
+- 스와이프 전환은 화면 아래쪽에서 시작한 좌우 제스처에 한정되며, Instagram Stories 내부 스와이프와 충돌하는지 실제 기기 확인이 필요합니다.
+- Instagram 계정 및 서버 측 변경 사항에 따라 로그인, DM, Stories 동작은 실제 기기 검증이 필요합니다.
