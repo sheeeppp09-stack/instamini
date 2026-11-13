@@ -5,8 +5,8 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
-// v0.6
-val appVersion = "0.6"
+// 수정할 때마다 0.1씩 올림 (versionCode도 +1). APK 파일명에도 반영됨.
+val appVersion = "0.7"
 
 // 서명 정보는 GitHub Actions Secrets 환경 변수로만 받는다.
 val signingFile = file(System.getenv("KEYSTORE_FILE") ?: "instamini.jks")
@@ -30,7 +30,7 @@ android {
         applicationId = "com.instamini.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 7
+        versionCode = 8
         versionName = appVersion
     }
 
