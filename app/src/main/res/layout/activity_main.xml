@@ -16,61 +16,62 @@
             android:layout_height="match_parent"
             android:overScrollMode="never" />
 
-        <LinearLayout
+        <View
+            android:id="@+id/cover"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="?attr/imBg" />
+
+        <ScrollView
             android:id="@+id/settings_pane"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:background="?attr/imBg"
-            android:orientation="vertical"
-            android:padding="16dp"
             android:visibility="gone">
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="@string/mode_title"
-                android:textColor="?attr/imText"
-                android:textSize="16sp" />
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="24dp"
-                android:orientation="horizontal">
+                android:orientation="vertical"
+                android:padding="16dp">
 
                 <TextView
-                    android:id="@+id/opt_light"
-                    style="@style/Opt"
-                    android:text="@string/mode_light" />
+                    style="@style/Head"
+                    android:text="@string/mode_title" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="24dp"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:id="@+id/opt_light"
+                        style="@style/Opt"
+                        android:text="@string/mode_light" />
+
+                    <TextView
+                        android:id="@+id/opt_dark"
+                        style="@style/Opt"
+                        android:text="@string/mode_dark" />
+                </LinearLayout>
 
                 <TextView
-                    android:id="@+id/opt_dark"
-                    style="@style/Opt"
-                    android:text="@string/mode_dark" />
+                    android:id="@+id/cache_size"
+                    style="@style/Head"
+                    android:text="@string/cache_calculating" />
+
+                <TextView
+                    style="@style/Note"
+                    android:layout_marginBottom="12dp"
+                    android:text="@string/cache_note" />
+
+                <TextView
+                    android:id="@+id/cache_clear"
+                    style="@style/Btn"
+                    android:text="@string/cache_clear" />
             </LinearLayout>
-
-            <TextView
-                android:id="@+id/cache_size"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="@string/cache_calculating"
-                android:textColor="?attr/imText"
-                android:textSize="16sp" />
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:layout_marginBottom="16dp"
-                android:text="@string/cache_note"
-                android:textColor="?attr/imGray"
-                android:textSize="13sp" />
-
-            <TextView
-                android:id="@+id/cache_clear"
-                style="@style/Btn"
-                android:text="@string/cache_clear" />
-        </LinearLayout>
+        </ScrollView>
     </FrameLayout>
 
     <View

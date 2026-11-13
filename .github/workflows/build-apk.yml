@@ -1,9 +1,8 @@
-name: Build APK
+name: Build and publish InstaMini APK
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -11,7 +10,7 @@ permissions:
 
 jobs:
   build:
-    name: Build and publish InstaMini APK
+    name: Build signed APK and publish release
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -37,7 +36,18 @@ jobs:
         with:
           gradle-version: "8.9"
 
-      - name: Prepare private release signing key
+      - name: Read app version
+        id: app-version
+        shell: bash
+        run: |
+          APP_VERSION="$(awk -F '"' '/val appVersion =/ {print $2; exit}' app/build.gradle.kts)"
+          if [[ -z "$APP_VERSION" ]]; then
+            echo "::error::Could not read appVersion from app/build.gradle.kts"
+            exit 1
+          fi
+          echo "value=$APP_VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Restore private signing key
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
         shell: bash
@@ -52,44 +62,57 @@ jobs:
 
       - name: Build release APK
         env:
+          KEYSTORE_FILE: ${{ github.workspace }}/app/instamini.jks
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        shell: bash
         run: |
           if [[ -z "$KEYSTORE_PASSWORD" || -z "$KEY_ALIAS" || -z "$KEY_PASSWORD" ]]; then
             echo "::error::Missing signing secrets. Check KEYSTORE_PASSWORD, KEY_ALIAS, and KEY_PASSWORD."
             exit 1
           fi
-          gradle --no-daemon assembleRelease
+          gradle --no-daemon clean assembleRelease
 
-      - name: Read app version
-        id: app-version
+      - name: Normalize and verify APK
+        id: apk
         shell: bash
         run: |
-          APP_VERSION="$(awk -F '"' '/val appVersion =/ {print $2; exit}' app/build.gradle.kts)"
-          if [[ -z "$APP_VERSION" ]]; then
-            echo "::error::Could not read appVersion from app/build.gradle.kts"
+          APP_VERSION="${{ steps.app-version.outputs.value }}"
+          APK_DIR="app/build/outputs/apk/release"
+          SOURCE_APK="$(find "$APK_DIR" -maxdepth 1 -type f -name '*.apk' ! -name '*unaligned*' -print -quit)"
+          if [[ -z "$SOURCE_APK" ]]; then
+            echo "::error::No release APK was generated."
             exit 1
           fi
-          echo "value=$APP_VERSION" >> "$GITHUB_OUTPUT"
+
+          APK="$APK_DIR/InstaMini-v${APP_VERSION}-release.apk"
+          if [[ "$SOURCE_APK" != "$APK" ]]; then
+            cp "$SOURCE_APK" "$APK"
+          fi
+
+          APKSIGNER="$ANDROID_HOME/build-tools/34.0.0/apksigner"
+          "$APKSIGNER" verify --verbose "$APK"
+          "$APKSIGNER" verify --print-certs "$APK" | tee "$RUNNER_TEMP/apk-certificate.txt"
+          echo "path=$APK" >> "$GITHUB_OUTPUT"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: InstaMini-v${{ steps.app-version.outputs.value }}-apk
-          path: app/build/outputs/apk/release/InstaMini-v${{ steps.app-version.outputs.value }}-release.apk
+          name: InstaMini-v${{ steps.app-version.outputs.value }}-release
+          path: ${{ steps.apk.outputs.path }}
           if-no-files-found: error
           retention-days: 14
 
       - name: Publish APK to GitHub Releases
+        if: github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           APP_VERSION="${{ steps.app-version.outputs.value }}"
           TAG="v${APP_VERSION}"
-          APK="app/build/outputs/apk/release/InstaMini-v${APP_VERSION}-release.apk"
-          test -f "$APK"
+          APK="${{ steps.apk.outputs.path }}"
 
           NOTES_FILE="$(mktemp)"
           cat > "$NOTES_FILE" <<EOF
@@ -97,12 +120,11 @@ jobs:
 
           Android 개인용 Instagram 경량 클라이언트.
 
-          - APK: `InstaMini-v${APP_VERSION}-release.apk`
+          - 공식 Instagram 앱 설치 불필요
+          - DM 백그라운드 알림 미지원
           - Android 8.0 (API 26) 이상
           - JDK 17 / Gradle 8.9 / Android SDK 34로 빌드
-          - 비공개 GitHub Actions signing secrets로 고정 서명
-
-          v0.1은 디버그 서명, v0.2부터는 동일한 개인 서명키를 사용합니다. 동일한 키가 유지되면 기존 앱 위에 업데이트 설치가 가능합니다.
+          - 개인 서명 키로 서명된 APK
           EOF
 
           if gh release view "$TAG" >/dev/null 2>&1; then

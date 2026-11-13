@@ -29,43 +29,89 @@ private const val HOME = "https://www.instagram.com/"
 private const val DM = "https://www.instagram.com/direct/inbox/"
 private const val REQ_FILE = 1
 
-// JS 인터페이스 없이 evaluateJavascript로만 주입.
-// 1) Reels 피드/Explore 링크와 피드 게시물을 숨김 (DM으로 받은 단일 릴스 /reel/ 링크는 유지)
-// 2) 홈(/)에서는 video를 즉시 정지·소스 제거 (스토리 종료 후 피드 영상 자동재생으로 인한 데이터 손실 방지)
-// 3) 단일 릴스(/reel/) 화면에서는 스크롤/스와이프/방향키 이동을 막음
+// JS 인터페이스 없이 evaluateJavascript로만 주입한다. (Instagram 화면 구조는 직접 확인하지 못해 추정 기반)
+// 1) Reels 피드/Explore 링크, 피드 게시물(article) 숨김
+// 2) 홈(/): "추천 게시물" 블록·로딩 스피너·그 뒤의 모든 요소(하단 Instagram 메뉴 포함) 숨김, video 정지
+//    -> 스토리 아래에서 피드가 계속 로딩되는 것을 막는다. 숨김은 html.im-home 클래스일 때만 적용되어 페이지를 벗어나면 풀린다.
+// 3) DM 목록(/direct/inbox): 맨 위 헤더 줄(뒤로가기·계정명·새 메시지) 숨김
+// 4) 릴스 화면(주소에 reel, 또는 화면 60% 이상의 큰 video)에서는 스크롤/스와이프/방향키 이동을 막음. 스토리는 제외.
 private const val HIDE_JS = """(function(){
 if(window.__im)return;window.__im=1;
-var s=document.createElement('style');
-s.textContent='a[href^="/reels"],a[href^="/explore"],article{display:none!important}';
-(document.head||document.documentElement).appendChild(s);
-function isHome(){return location.pathname==='/'}
-function isReel(){return location.pathname.split('/').indexOf('reel')>=0}
+var d=document,H=d.documentElement;
+var s=d.createElement('style');
+s.textContent='a[href^="/reels"],a[href^="/explore"],article{display:none!important}'
++'html.im-home [data-imh],html.im-home svg[aria-label="Loading..."],html.im-home svg[aria-label="로드 중..."],html.im-home [role="progressbar"],html.im-inbox [data-imi]{display:none!important}';
+(d.head||H).appendChild(s);
+function P(){return location.pathname}
+function isHome(){return P()==='/'}
+function isInbox(){return P().indexOf('/direct/inbox')===0}
+function isStory(){return P().indexOf('/stories')===0}
+function isReelUrl(){return P().split('/').indexOf('reel')>=0}
+function bigVideo(){var a=d.querySelectorAll('video'),h=innerHeight*0.6;for(var i=0;i<a.length;i++){var r=a[i].getBoundingClientRect();if(r.height>h&&r.bottom>0&&r.top<innerHeight)return true}return false}
+function locked(){return !isStory()&&(isReelUrl()||bigVideo())}
 function kill(v){try{v.pause();v.removeAttribute('src');v.preload='none';v.load()}catch(e){}}
-new MutationObserver(function(){
-if(!isHome())return;
-var a=document.querySelectorAll('video');
-for(var i=0;i<a.length;i++)kill(a[i]);
-}).observe(document.documentElement,{childList:true,subtree:true});
-function lock(e){if(isReel())e.preventDefault()}
-document.addEventListener('touchmove',lock,{passive:false,capture:true});
-document.addEventListener('wheel',lock,{passive:false,capture:true});
-document.addEventListener('keydown',function(e){
+function mark(n){if(n&&n.setAttribute)n.setAttribute('data-imh','1')}
+function after(n){var c=0;while(n&&n!==d.body&&c<12){var x=n.nextElementSibling;while(x){mark(x);x=x.nextElementSibling}n=n.parentElement;c++}}
+function blockOf(n){var c=0;while(n.parentElement&&n.parentElement!==d.body&&!n.parentElement.querySelector('img,canvas')&&c<12){n=n.parentElement;c++}return n}
+function findText(){var w=d.createTreeWalker(d.body,NodeFilter.SHOW_TEXT),n;while((n=w.nextNode())){if(/추천 게시물|Suggested [Pp]osts/.test(n.nodeValue))return n.parentElement}return null}
+function feed(){
+var a=[],t=findText();if(t)a.push(t);
+var sp=d.querySelectorAll('svg[aria-label="Loading..."],svg[aria-label="로드 중..."],[role="progressbar"]');
+for(var i=0;i<sp.length;i++)a.push(sp[i]);
+for(var j=0;j<a.length;j++){var b=blockOf(a[j]);mark(b);after(b)}
+var l=d.querySelectorAll('a[href="/direct/inbox/"]');
+for(var k=0;k<l.length;k++){var e=l[k];while(e&&e!==d.body){if(getComputedStyle(e).position==='fixed'&&e.getBoundingClientRect().bottom>innerHeight*0.7){mark(e);break}e=e.parentElement}}
+var v=d.querySelectorAll('video');for(var m=0;m<v.length;m++)kill(v[m]);
+}
+var hd=null;
+function inboxHeader(){
+if(hd&&hd.isConnected)return;
+var w=innerWidth,all=d.elementsFromPoint(w/2,30),e,r;
+for(var i=0;i<all.length;i++){e=all[i];if(e===H||e===d.body)continue;r=e.getBoundingClientRect();
+if(r.top>-2&&r.top<24&&r.height>=32&&r.height<=96&&r.width>=w*0.9&&e.querySelectorAll('svg').length>=2){hd=e;e.setAttribute('data-imi','1');return}}
+}
+var tm=0;
+function run(){tm=0;
+H.classList.toggle('im-home',isHome());
+H.classList.toggle('im-inbox',isInbox());
+if(isHome())feed();
+if(isInbox())inboxHeader();
+}
+function sched(){if(!tm)tm=setTimeout(run,400)}
+new MutationObserver(sched).observe(H,{childList:true,subtree:true});
+addEventListener('popstate',sched);
+run();
+var lk=false;
+d.addEventListener('touchstart',function(){lk=locked()},{passive:true,capture:true});
+d.addEventListener('touchmove',function(e){if(lk)e.preventDefault()},{passive:false,capture:true});
+d.addEventListener('wheel',function(e){if(locked())e.preventDefault()},{passive:false,capture:true});
+d.addEventListener('keydown',function(e){
 var k=e.key;
-if(isReel()&&(k==='ArrowDown'||k==='ArrowUp'||k==='PageDown'||k==='PageUp'||k===' '))e.preventDefault();
+if((k==='ArrowDown'||k==='ArrowUp'||k==='PageDown'||k==='PageUp'||k===' ')&&locked())e.preventDefault();
 },true);
 })()"""
+
+// 페이지를 다시 불러오지 않고 Instagram 내부 링크를 눌러 이동(SPA 이동). 숨겨진 링크도 click()은 동작한다.
+private fun clickJs(href: String) =
+    "(function(){var a=document.querySelector('a[href=\"$href\"]');if(a){a.click();return 1}return 0})()"
 
 class MainActivity : Activity() {
 
     private lateinit var web: WebView
+    private lateinit var cover: View
     private lateinit var settingsPane: View
     private lateinit var cacheSize: TextView
-    private lateinit var tabs: Array<TextView>   // 0 = Stories, 1 = DM, 2 = 설정
-    private lateinit var modes: Array<TextView>  // 0 = 라이트, 1 = 다크
+    private lateinit var tabs: Array<TextView>      // 0 = Stories, 1 = DM, 2 = 설정
+    private lateinit var modes: Array<TextView>     // 0 = 라이트, 1 = 다크
+
+    private val prefs by lazy { getSharedPreferences("s", MODE_PRIVATE) }
 
     private var dark = false
     private var webTab = 1 // 0 = Stories, 1 = DM
     private var storiesMode = false
+    private var booting = true
+    private var bootRunning = false
+    private var bootTries = 0
     private var filePicker: ValueCallback<Array<Uri>>? = null
     private var downX = 0f
     private var downY = 0f
@@ -73,13 +119,14 @@ class MainActivity : Activity() {
     @Suppress("DEPRECATION")
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
-        dark = getSharedPreferences("s", MODE_PRIVATE).getBoolean("dark", false)
+        dark = prefs.getBoolean("dark", false)
         setTheme(if (dark) R.style.Theme_InstaMini_Dark else R.style.Theme_InstaMini)
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
         applyBars(color(R.attr.imBg))
 
         web = findViewById(R.id.web)
+        cover = findViewById(R.id.cover)
         settingsPane = findViewById(R.id.settings_pane)
         cacheSize = findViewById(R.id.cache_size)
         tabs = arrayOf(
@@ -106,10 +153,9 @@ class MainActivity : Activity() {
 
         for (i in tabs.indices) tabs[i].setOnClickListener { select(i) }
         for (i in modes.indices) modes[i].setOnClickListener { setDark(i == 1) }
-        markModes()
+        setSel(modes, if (dark) 1 else 0)
 
         findViewById<View>(R.id.cache_clear).setOnClickListener {
-            // 임시 캐시 전부 삭제: HTTP 캐시 + cacheDir. 쿠키/Local Storage/DOM Storage는 dataDir에 있어 영향 없음.
             web.clearCache(true)
             Thread {
                 clearDir(cacheDir)
@@ -117,6 +163,7 @@ class MainActivity : Activity() {
             }.start()
         }
 
+        webTab = 1
         select(1)
     }
 
@@ -138,14 +185,16 @@ class MainActivity : Activity() {
             return false
         }
 
-        // SPA 내부 이동(history.pushState)도 여기서 잡힌다.
         override fun doUpdateVisitedHistory(view: WebView, url: String?, isReload: Boolean) {
             if (url == null) return
             val u = Uri.parse(url)
             if (!isInstagram(u.host)) return
             val p = pathOf(u)
             if (isBlocked(p) || (p == "/" && !storiesMode)) {
-                if (view.canGoBack()) view.goBack() else view.loadUrl(DM)
+                val l = view.copyBackForwardList()
+                val prev = if (l.currentIndex > 0) l.getItemAtIndex(l.currentIndex - 1)?.url else null
+                val prevOk = prev != null && !pathOf(Uri.parse(prev)).startsWith("/accounts")
+                if (view.canGoBack() && prevOk) view.goBack() else view.loadUrl(DM)
             }
         }
 
@@ -153,16 +202,15 @@ class MainActivity : Activity() {
             if (url != null && isInstagram(Uri.parse(url).host)) {
                 view.evaluateJavascript(HIDE_JS, null)
             }
+            if (booting) startBoot() else hideCoverLater()
         }
 
-        // 렌더러 프로세스가 죽으면(저메모리 등) 앱 크래시 대신 액티비티를 새로 만든다.
         override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
             recreate()
             return true
         }
     }
 
-    // DM 사진/파일 첨부: 시스템 파일 선택기 사용 (별도 권한 불필요)
     private val chrome = object : WebChromeClient() {
         override fun onShowFileChooser(
             view: WebView,
@@ -191,21 +239,68 @@ class MainActivity : Activity() {
         }
     }
 
-    // 좌→우 스와이프 = Stories, 우→좌 스와이프 = DM.
-    // 스토리 트레이/노트 행의 가로 스크롤과 겹치지 않도록 화면 아래 70%에서 시작한 스와이프만 인식한다.
+    private fun startBoot() {
+        if (bootRunning) return
+        val p = pathOf(Uri.parse(web.url ?: return))
+        if (p != "/") {
+            booting = false
+            storiesMode = false
+            hideCoverLater()
+            return
+        }
+        bootRunning = true
+        bootTries = 0
+        bootStep()
+    }
+
+    private fun bootStep() {
+        web.evaluateJavascript(clickJs("/direct/inbox/")) { r ->
+            if (r == "1") {
+                storiesMode = false
+                booting = false
+                bootRunning = false
+                hideCoverLater()
+            } else if (++bootTries < 15) {
+                web.postDelayed({ if (booting) bootStep() }, 400)
+            } else {
+                storiesMode = false
+                booting = false
+                bootRunning = false
+                web.loadUrl(DM)
+            }
+        }
+    }
+
+    private fun hideCoverLater() {
+        cover.postDelayed({ cover.visibility = View.GONE }, 350)
+    }
+
     override fun dispatchTouchEvent(e: MotionEvent): Boolean {
         when (e.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 downX = e.x
                 downY = e.y
             }
-            MotionEvent.ACTION_UP -> onSwipe(e.x - downX, e.y - downY)
+            MotionEvent.ACTION_UP -> {
+                val dx = e.x - downX
+                val dy = e.y - downY
+                onSwipe(dx, dy)
+                onPull(dx, dy)
+            }
         }
         return super.dispatchTouchEvent(e)
     }
 
+    private fun onPull(dx: Float, dy: Float) {
+        if (settingsPane.visibility == View.VISIBLE || booting) return
+        if (dy < web.height * 0.35f || dy < abs(dx) * 2) return
+        if (downY > web.height * 0.15f || web.canScrollVertically(-1)) return
+        val path = pathOf(Uri.parse(web.url ?: return))
+        if (path == "/" || path.startsWith("/direct/inbox")) web.reload()
+    }
+
     private fun onSwipe(dx: Float, dy: Float) {
-        if (settingsPane.visibility == View.VISIBLE) return
+        if (settingsPane.visibility == View.VISIBLE || booting) return
         if (abs(dx) < web.width * 0.35f || abs(dx) < abs(dy) * 2) return
         if (downY < web.height * 0.3f) return
         val path = pathOf(Uri.parse(web.url ?: return))
@@ -225,25 +320,58 @@ class MainActivity : Activity() {
             return
         }
         settingsPane.visibility = View.GONE
-        // 설정에서 돌아올 때는 재로딩하지 않는다. WebView는 계속 살아 있다.
-        if (i != webTab || web.url == null) {
+        if (web.url == null) {
+            webTab = 1
+            storiesMode = true
+            booting = true
+            web.loadUrl(HOME)
+        } else if (i != webTab) {
             webTab = i
             storiesMode = i == 0
-            web.loadUrl(if (i == 0) HOME else DM)
+            go(i)
         }
+    }
+
+    private fun go(target: Int) {
+        val l = web.copyBackForwardList()
+        val cur = l.currentIndex
+        var best = 0
+        for (d in 1..maxOf(cur, l.size - 1 - cur)) {
+            if (cur - d >= 0 && matches(l.getItemAtIndex(cur - d)?.url, target)) { best = -d; break }
+            if (cur + d < l.size && matches(l.getItemAtIndex(cur + d)?.url, target)) { best = d; break }
+        }
+        if (best != 0) {
+            web.goBackOrForward(best)
+            return
+        }
+        val href = if (target == 0) "/" else "/direct/inbox/"
+        web.evaluateJavascript(clickJs(href)) { r ->
+            if (r != "1") {
+                cover.visibility = View.VISIBLE
+                web.loadUrl(if (target == 0) HOME else DM)
+            }
+        }
+    }
+
+    private fun matches(url: String?, target: Int): Boolean {
+        if (url == null) return false
+        val u = Uri.parse(url)
+        if (!isInstagram(u.host)) return false
+        val p = pathOf(u)
+        return if (target == 0) p == "/" else p.startsWith("/direct/inbox")
     }
 
     private fun setDark(d: Boolean) {
         if (d == dark) return
-        getSharedPreferences("s", MODE_PRIVATE).edit().putBoolean("dark", d).apply()
-        recreate() // 테마 적용을 위해 한 번 재생성. 로그인(쿠키)은 유지됨.
+        prefs.edit().putBoolean("dark", d).apply()
+        recreate()
     }
 
-    private fun markModes() {
-        for (k in modes.indices) {
-            val on = (k == 1) == dark
-            modes[k].setTypeface(null, if (on) Typeface.BOLD else Typeface.NORMAL)
-            modes[k].setTextColor(color(if (on) R.attr.imText else R.attr.imGray))
+    private fun setSel(views: Array<TextView>, sel: Int) {
+        for (k in views.indices) {
+            val on = k == sel
+            views[k].setTypeface(null, if (on) Typeface.BOLD else Typeface.NORMAL)
+            views[k].setTextColor(color(if (on) R.attr.imText else R.attr.imGray))
         }
     }
 
@@ -305,8 +433,10 @@ class MainActivity : Activity() {
 
     @Suppress("OVERRIDE_DEPRECATION")
     override fun onBackPressed() {
+        val p = web.url?.let { pathOf(Uri.parse(it)) }
         when {
             settingsPane.visibility == View.VISIBLE -> select(webTab)
+            p == "/" || p?.startsWith("/direct/inbox") == true -> super.onBackPressed()
             web.canGoBack() -> web.goBack()
             else -> super.onBackPressed()
         }
@@ -321,7 +451,7 @@ class MainActivity : Activity() {
     override fun onPause() {
         web.onPause()
         web.pauseTimers()
-        CookieManager.getInstance().flush() // 로그인 쿠키를 디스크에 확정 저장
+        CookieManager.getInstance().flush()
         super.onPause()
     }
 

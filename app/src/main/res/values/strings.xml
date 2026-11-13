@@ -4,9 +4,11 @@
     <string name="tab_stories">Stories</string>
     <string name="tab_dm">DM</string>
     <string name="tab_settings">설정</string>
+
     <string name="mode_title">화면 모드</string>
     <string name="mode_light">라이트</string>
     <string name="mode_dark">다크</string>
+
     <string name="cache_calculating">임시 캐시: 계산 중…</string>
     <string name="cache_size">임시 캐시: %1$s</string>
     <string name="cache_note">로그인 쿠키, Local Storage, DOM Storage는 삭제하지 않습니다.</string>

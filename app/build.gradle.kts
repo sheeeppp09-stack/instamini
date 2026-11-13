@@ -5,22 +5,22 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
-val appVersion = "0.4"
+// v0.6
+val appVersion = "0.6"
+
+// 서명 정보는 GitHub Actions Secrets 환경 변수로만 받는다.
+val signingFile = file(System.getenv("KEYSTORE_FILE") ?: "instamini.jks")
+val signingStorePassword = System.getenv("KEYSTORE_PASSWORD")
+val signingKeyAlias = System.getenv("KEY_ALIAS")
+val signingKeyPassword = System.getenv("KEY_PASSWORD")
+val canSign = signingFile.exists() &&
+    !signingStorePassword.isNullOrBlank() &&
+    !signingKeyAlias.isNullOrBlank() &&
+    !signingKeyPassword.isNullOrBlank()
 
 base {
     archivesName.set("InstaMini-v$appVersion")
 }
-
-// Signing credentials are injected by GitHub Actions Secrets.
-// Never store the keystore or passwords in this public repository.
-val signingFile = file("instamini.jks")
-val signingStorePassword = System.getenv("KEYSTORE_PASSWORD")
-val signingKeyAlias = System.getenv("KEY_ALIAS")
-val signingKeyPassword = System.getenv("KEY_PASSWORD")
-val hasPrivateSigningKey = signingFile.exists() &&
-    !signingStorePassword.isNullOrBlank() &&
-    !signingKeyAlias.isNullOrBlank() &&
-    !signingKeyPassword.isNullOrBlank()
 
 android {
     namespace = "com.instamini.app"
@@ -30,12 +30,12 @@ android {
         applicationId = "com.instamini.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 5
+        versionCode = 7
         versionName = appVersion
     }
 
     signingConfigs {
-        if (hasPrivateSigningKey) {
+        if (canSign) {
             create("release") {
                 storeFile = signingFile
                 storePassword = signingStorePassword
@@ -53,11 +53,8 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            signingConfig = if (hasPrivateSigningKey) {
-                signingConfigs.getByName("release")
-            } else {
-                signingConfigs.getByName("debug")
-            }
+            // 서명 정보가 없으면 unsigned APK를 생성한다. 배포 Workflow는 서명 Secrets를 필수 검사한다.
+            if (canSign) signingConfig = signingConfigs.getByName("release")
         }
     }
 
@@ -90,4 +87,4 @@ kotlin {
     }
 }
 
-// No external dependencies: no AndroidX, Compose, network, analytics, or ad SDKs.
+// 외부 의존성 없음 (AndroidX, Compose, 네트워크/분석/광고 SDK 미사용)

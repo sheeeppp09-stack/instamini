@@ -1,43 +1,31 @@
-# InstaMini v0.4
+# InstaMini v0.6
 
-Android 개인용 Instagram 경량 클라이언트입니다.
+Instagram 웹(WebView)을 감싼 초경량 Android 앱입니다. Kotlin 단일 Activity, 단일 WebView, XML 레이아웃을 사용하며 외부 라이브러리를 포함하지 않습니다.
 
-## APK 배포
+## 앱 정보
+- 패키지: `com.instamini.app`
+- 최소 지원: Android 8.0 (API 26)
+- versionName: `0.6`
+- versionCode: `7`
 
-GitHub Actions가 APK를 빌드하고 v0.4 Release에 게시합니다.
+## 주요 기능
+- Instagram 웹 로그인 및 로그인 상태 유지
+- DM / Stories 탭 전환 및 좌우 스와이프 전환
+- Reels·Explore 진입 제한 및 단일 릴스 화면 스크롤 잠금
+- 홈 추천 게시물과 불필요한 요소 숨김
+- 당겨서 새로고침, DM 파일·사진 첨부
+- 라이트/다크 모드
+- 임시 캐시 삭제(로그인 쿠키와 Local Storage는 유지)
 
-- Actions: https://github.com/sheeeppp09-stack/instamini/actions
-- Releases: https://github.com/sheeeppp09-stack/instamini/releases
-- APK: `InstaMini-v0.4-release.apk`
+## 공식 Instagram 앱 의존성
+공식 Instagram 앱이 설치되어 있지 않아도 InstaMini 자체 WebView로 동작합니다. Android 알림 접근 권한이나 알림 표시 권한을 요청하지 않습니다. 앱이 선언하는 권한은 `INTERNET`뿐입니다.
 
-## 빌드 환경
+**DM 백그라운드 알림은 지원하지 않습니다.** v0.5에서 시험했던 공식 Instagram 앱 알림 미러링 코드는 v0.6에서 제거했습니다. Instagram 웹 계정에 새 DM이 왔는지는 InstaMini를 열어 확인해야 합니다.
 
-- JDK 17
-- Android SDK 34
-- 최소 Android 버전: Android 8.0 (API 26)
-- versionName: 0.4
-- versionCode: 5
-- applicationId: `com.instamini.app`
+## 빌드 및 배포
+- GitHub Actions: https://github.com/sheeeppp09-stack/instamini/actions
+- GitHub Releases: https://github.com/sheeeppp09-stack/instamini/releases
+- JDK 17, Android SDK 34, Gradle 8.9 사용
+- Release APK는 기존 개인 서명 키를 GitHub Actions Secrets에서 복원해 빌드합니다.
 
-## 서명 키 설정
-
-앱 업데이트 시 기존 앱 데이터와 로그인 상태를 유지하려면 이전 버전과 동일한 서명 키가 필요합니다.
-
-**JKS 파일과 비밀번호는 저장소에 올리지 않습니다.** GitHub Actions는 Repository Secrets에서 키를 복원합니다.
-
-Settings → Secrets and variables → Actions에 다음 4개 항목이 등록되어 있어야 합니다.
-
-| Secret | 내용 |
-|---|---|
-| `KEYSTORE_BASE64` | 기존 JKS 파일의 Base64 문자열 |
-| `KEYSTORE_PASSWORD` | JKS store password |
-| `KEY_ALIAS` | key alias |
-| `KEY_PASSWORD` | key password |
-
-기존 v0.3 설치본과 동일한 키를 사용해야 업데이트 설치가 가능합니다. 키가 다르면 앱을 삭제하고 재설치해야 할 수 있으며, 앱 데이터와 로그인 정보가 삭제됩니다.
-
-## 알려진 제한
-
-- 백그라운드 DM 알림 및 새 DM 감지 기능은 포함하지 않습니다.
-- Instagram 웹사이트 구조 변경 시 일부 기능이 동작하지 않을 수 있습니다.
-- Instagram 로그인, DM, 스토리는 실제 기기에서 별도 검증이 필요합니다.
+빌드 및 수동 검증 방법은 `BUILD_AND_VERIFY.md`를 참고하세요.
