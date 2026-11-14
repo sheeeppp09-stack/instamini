@@ -1,67 +1,56 @@
-# InstaMini v0.7 빌드 및 검증
+# InstaMini 빌드 및 검증 (v0.8)
 
-## 버전 정보
-- versionName: `0.7`
-- versionCode: `8`
-- applicationId: `com.instamini.app`
-- minSdk: 26
-- targetSdk: 34
-- compileSdk: 34
-
-## 빌드 환경
-- JDK 17
-- Android SDK 34 (Build Tools 34.0.0)
-- Gradle 8.9
-- Android Gradle Plugin 8.7.3
-- Kotlin Gradle Plugin 2.0.21
-
-로컬 빌드:
-```powershell
-gradle --no-daemon clean assembleRelease
+## 빌드
 ```
+./gradlew clean assembleRelease
+```
+결과: `app/build/outputs/apk/release/InstaMini-v0.8-release.apk` (버전은 `app/build.gradle.kts`의 `appVersion`, `versionCode`는 9)
 
-결과 APK는 `app/build/outputs/apk/release/`에 생성됩니다. 배포 Workflow는 실제 생성된 APK를 `InstaMini-v0.7-release.apk`로 정규화한 뒤 서명을 검증하고 GitHub Release에 게시합니다.
+## 서명 (중요)
+- 서명 정보는 소스에 없다. 환경 변수 `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`, 키 파일(`KEYSTORE_FILE`, 기본 `app/instamini.jks`)이 있을 때만 release에 서명된다.
+- GitHub Actions(`.github/workflows/build-apk.yml`)는 저장소 Secrets `KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`로 서명한다.
+- 이전 버전과 같은 키를 써야 덮어쓰기 설치가 된다. 키가 다르면 "패키지가 기존 패키지와 충돌" 오류가 나고, 환경 변수가 없으면 서명되지 않은 APK라 설치되지 않는다.
 
-## 서명 키 보안
-- JKS 파일과 비밀번호는 저장소에 포함하지 않습니다.
-- GitHub Repository Secrets에 다음 네 항목이 있어야 합니다.
-  - `KEYSTORE_BASE64`
-  - `KEYSTORE_PASSWORD`
-  - `KEY_ALIAS`
-  - `KEY_PASSWORD`
-- Release 빌드에는 기존 버전과 동일한 개인 서명 키를 사용해야 합니다. 키가 다르면 Android에서 기존 앱 위에 업데이트 설치가 거부됩니다.
-- Actions는 필요한 Secrets가 누락되면 빌드를 중단합니다. unsigned APK를 정상 배포물로 취급하지 않습니다.
+## 독립 실행 / DM 알림 없음
+- v0.6부터 알림 기능(공식 Instagram 앱 알림 미러링)을 제거했다. 공식 Instagram 앱 없이 독립 실행된다.
+- 알림 접근 권한과 알림 표시 권한을 요청하지 않는다. 선언 권한은 `INTERNET`뿐이다.
+- **DM 백그라운드 알림은 지원하지 않는다.** 공식 앱 없이 새 DM을 안정적으로 감지할 공식 방법이 없다. 앱을 열어야 새 메시지를 볼 수 있다.
 
-## v0.7 변경 사항
-- 추천 게시물 텍스트 노드를 찾는 DOM 전체 탐색 결과를 캐시하고, 재탐색을 2초 간격으로 제한
-- `VelocityTracker`로 스와이프 속도를 감지해 빠른 좌우 제스처의 탭 전환 조건을 추가
-- 기존 단일 WebView, 로그인 쿠키 및 페이지 상태 유지 로직 보존
-- 비공식 DM API 폴링이나 백그라운드 DM 감시를 추가하지 않음
-
-## 성능 측정 상태
-이 ZIP에는 실제 Android 기기에서 측정한 전후 로딩 시간, 프레임 시간, CPU 또는 메모리 결과가 포함되어 있지 않습니다. 코드 변경을 성능 개선의 확정된 수치로 표현하지 않습니다.
-
-기기 USB 디버깅 연결 후:
-- 메모리: `adb shell dumpsys meminfo | grep -iE "instamini|webview|sandboxed"`
+## 측정 명령 (기기 USB 디버깅 연결 후)
+- APK 용량: `ls -l app/build/outputs/apk/release/*.apk`
+- 메모리: `adb shell dumpsys meminfo | grep -iE "instamini|webview|sandboxed"` (WebView 렌더러 PSS 포함)
 - CPU: `adb shell top -b -n 1 | grep -iE "instamini|sandboxed|webview"`
-- Chrome WebView 원격 디버깅: `chrome://inspect`의 Performance 탭
 
 ## 수동 검증 체크리스트
-1. 공식 Instagram 앱이 설치되지 않은 기기에서 InstaMini 설치 및 실행
-2. 로그인 후 앱을 완전히 종료하고 재실행해 로그인 유지 확인
-3. 시작 시 DM 목록이 열리는지 확인
-4. DM ↔ Stories 탭 및 좌우 스와이프 전환 확인
-5. 빠른 스와이프와 느린 드래그 모두에서 의도한 탭으로 전환되는지 확인
-6. Stories 화면에서 스토리 트레이의 가로 스크롤과 탭 전환 제스처가 충돌하지 않는지 확인
-7. Stories 최초 진입·재진입 시간을 같은 네트워크 환경에서 각각 5회 측정
-8. Reels / Explore 접근 제한 확인
-9. 추천 게시물, 로딩 스피너, 불필요한 홈 피드 요소가 숨겨지는지 확인
-10. DM 파일 첨부, 당겨서 새로고침, 캐시 삭제 후 로그인 유지 확인
-11. 라이트/다크 모드 전환 확인
-12. 기존 v0.6 위에 덮어쓰기 설치가 되는지 확인(서명 키가 같아야 함)
+1. 공식 Instagram 앱이 없는 기기에서 설치·실행되고, 알림 관련 권한 요청이 나타나지 않는지
+2. 로그인 → 앱 완전 종료 → 재실행 → 로그인 유지
+3. 시작 시 Instagram 로고 화면 없이 DM 목록이 열리는지
+4. DM ↔ Stories 스와이프/탭 전환이 로고·로딩 없이 즉시 되는지
+5. 스토리 화면에서 "추천 게시물", 로딩 스피너, 하단 Instagram 메뉴가 보이지 않고 피드가 계속 로딩되지 않는지
+6. DM 목록 맨 위 헤더 줄이 숨겨지는지
+7. 친구가 보낸 릴스를 볼 수 있고 아래로 넘어가지 않는지
+8. 당겨서 새로고침, DM 사진 첨부, 캐시 전부 삭제 후 로그인 유지, 다크/라이트
+9. 설정 화면에 화면 모드와 캐시 항목만 있고 빈 공간이 없는지
+10. 이전 버전(v0.5) 위에 덮어쓰기 설치가 되는지(같은 서명 키)
+
+## v0.7 성능 변경 (측정 전)
+- 홈의 "추천 게시물" 탐색이 문서 전체 텍스트를 반복해서 훑던 것을 결과 캐시 + 2초 간격 제한으로 변경(CPU 감소 목적).
+- 스와이프 전환: 35% 이상 끌어야만 반응하던 것을, 빠르게 쓸어도(1200px/s 이상, 15% 이상 이동) 반응하도록 변경. 터치는 여전히 WebView에 그대로 전달한다.
+- 이 변경들의 효과(시간, 메모리, CPU)는 기기에서 측정하지 못했다. 측정은 아래 명령과 Chrome `chrome://inspect`의 Performance 탭으로 한다.
+
+## 성능 측정용 디버그 빌드 (v0.8)
+- 디버그 빌드에서만 WebView 원격 디버깅이 켜진다(`chrome://inspect`). 배포용 release APK에서는 꺼져 있다.
+- `./gradlew assembleDebug` → `app/build/outputs/apk/debug/InstaMini-v0.8-debug.apk`. GitHub Actions는 `InstaMini-debug-apk`로도 올린다.
+- 디버그 APK는 서명 키가 달라 배포용 앱 위에 설치할 수 없다. 배포용을 지우고(로그인 풀림) 설치해야 하고, 측정 후 다시 배포용을 설치하려면 디버그 앱을 지워야 한다.
+- 측정 절차: 폰 USB 디버깅 허용 → PC Chrome `chrome://inspect#devices` → InstaMini 페이지 `inspect` → Performance 탭 녹화.
 
 ## 알려진 한계
-- Stories 홈 첫 표시 속도는 Instagram 홈 페이지의 다운로드·실행·렌더링 시간에 영향을 받습니다.
-- Instagram DOM이 변경되면 추천 게시물 탐지 및 숨김 처리가 동작하지 않을 수 있습니다.
-- 스와이프 전환은 화면 아래쪽에서 시작한 좌우 제스처에 한정되며, Instagram Stories 내부 스와이프와 충돌하는지 실제 기기 확인이 필요합니다.
-- Instagram 계정 및 서버 측 변경 사항에 따라 로그인, DM, Stories 동작은 실제 기기 검증이 필요합니다.
+- Stories 홈 첫 표시 속도는 Instagram 홈 페이지(피드 포함)를 통째로 불러오는 시간에 좌우되며, 앱에서 줄이지 못했다.
+- Instagram 화면 구조를 직접 확인하지 못해 숨김 처리(추천 게시물, 하단 메뉴, DM 헤더)는 추정 기반이다. 안 숨겨지거나 다른 것이 숨겨지면 화면 캡처가 필요하다.
+- DM 헤더를 숨기면서 새 메시지 작성 버튼과 뒤로가기 버튼도 사라진다(요청 사항).
+- 뒤로가기는 Stories 홈과 DM 목록에서 앱을 종료한다. 대화방에서는 목록으로 돌아간다.
+- 스토리·DM 전환이 즉시 되려면 둘이 같은 페이지의 기록에 있어야 한다. 기록에 없으면 링크 클릭, 그것도 안 되면 전체 로드(이때는 cover로 로고 화면만 가림).
+- 홈에서 "추천 게시물" 블록을 문구("추천 게시물"/"Suggested Posts")로 찾는다. 다른 언어에서는 스피너·article 숨김만 동작한다.
+- 숨김 스크립트가 화면 변화마다(0.4초 간격 제한) 실행되어 CPU를 조금 쓴다.
+- 카메라 촬영 첨부 미지원, 다크 모드는 Instagram이 테마를 따라가는 경우에만 웹 화면까지 적용
+- 테마 변경 시 화면이 한 번 다시 로드됨(로그인 유지)

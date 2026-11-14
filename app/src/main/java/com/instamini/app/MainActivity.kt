@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.content.pm.ApplicationInfo
 import android.graphics.Typeface
 import android.net.Uri
 import android.os.Build
@@ -132,6 +133,11 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
         applyBars(color(R.attr.imBg))
+
+        // 원격 디버깅(chrome://inspect)은 디버그 빌드에서만 켠다. 배포용(release) APK에서는 꺼져 있다.
+        if (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0) {
+            WebView.setWebContentsDebuggingEnabled(true)
+        }
 
         web = findViewById(R.id.web)
         cover = findViewById(R.id.cover)
