@@ -104,6 +104,17 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+      - name: Build debug APK
+        run: gradle --no-daemon assembleDebug
+
+      - name: Upload debug APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: InstaMini-v${{ steps.app-version.outputs.value }}-debug
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Publish APK to GitHub Releases
         if: github.ref == 'refs/heads/main'
         env:
