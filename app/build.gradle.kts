@@ -6,7 +6,7 @@ plugins {
 }
 
 // 수정할 때마다 0.1씩 올림 (versionCode도 +1). APK 파일명에도 반영됨.
-val appVersion = "0.8"
+val appVersion = "0.9"
 
 // 서명 정보는 환경 변수(GitHub Actions Secrets)로만 받는다. 소스에 비밀번호/키 파일을 두지 않는다.
 //  KEYSTORE_FILE(선택, 기본 app/instamini.jks), KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD
@@ -27,7 +27,7 @@ android {
         minSdk = 26
         // 34 유지: 35 이상은 edge-to-edge가 강제되어 상단바가 상태표시줄과 겹침
         targetSdk = 34
-        versionCode = 9
+        versionCode = 10
         versionName = appVersion
     }
 
