@@ -293,7 +293,7 @@ class MainActivity : Activity() {
                 if (isInstagram(u.host) && (p.startsWith("/api") || p.startsWith("/graphql"))) {
                     val h = request.requestHeaders
                     val fn = h["x-fb-friendly-name"] ?: h["X-FB-Friendly-Name"] ?: "-"
-                    Log.d(TAG, "net ${request.method} ${p.replace(Regex("\\\\d{5,}"), "#")} fn=$fn")
+                    Log.d(TAG, "net ${request.method} ${p.replace(Regex("\\d{5,}"), "#")} fn=$fn")
                 }
                 return null
             }
